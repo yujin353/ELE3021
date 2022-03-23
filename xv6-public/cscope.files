@@ -4,6 +4,7 @@
 ./sleeplock.h
 ./swtch.S
 ./elf.h
+./my_userapp.c
 ./syscall.h
 ./mmu.h
 ./defs.h
@@ -35,6 +36,7 @@
 ./stressfs.c
 ./kbd.c
 ./picirq.c
+./getppid.c
 ./mp.h
 ./usys.S
 ./mp.c
@@ -64,6 +66,7 @@
 ./asm.h
 ./forktest.c
 ./init.c
+./prac_syscall.c
 ./fcntl.h
 ./umalloc.c
 ./printf.c

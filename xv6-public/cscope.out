@@ -1,4 +1,4 @@
-cscope 15 $HOME/xv6-public -q 0000001848 0000197772
+cscope 15 $HOME/OS/xv6-public -q 0000001854 0000198596
 	@asm.h
 
 5 
@@ -3725,7 +3725,11 @@ pgdú
 uva
 );
 
-190 
+190 
+	`myfun˘i⁄
+(*);
+
+192 
 	#NELEM
 (
 x
@@ -9491,6 +9495,44 @@ ush‹t
 [
 DIRSIZ
 ];
+
+	@getppid.c
+
+1 
+	~"ty≥s.h
+"
+
+2 
+	~"°©.h
+"
+
+3 
+	~"u£r.h
+"
+
+6 
+	$gëµid
+()
+
+8 
+	`¥ötf
+(1, "MyÖid i†%d\n", 
+	`gëpid
+());
+
+9 
+	`¥ötf
+(1, "MyÖpid i†%d\n", 
+	`gëpid
+());
+
+10 
+	`exô
+();
+
+11 
+	}
+}
 
 	@grep.c
 
@@ -17690,6 +17732,58 @@ uöt
 
 	)
 
+	@my_userapp.c
+
+1 
+	~"ty≥s.h
+"
+
+2 
+	~"°©.h
+"
+
+3 
+	~"u£r.h
+"
+
+6 
+	$maö
+(
+¨gc
+, *
+¨gv
+[])
+
+8 *
+buf
+ = "Hello xv6!";
+
+9 
+ªt_vÆ
+;
+
+10 
+ªt_vÆ
+ = 
+	`myfun˘i⁄
+(
+buf
+);
+
+11 
+	`¥ötf
+(1, "Refu∫ vÆuê: 0x%x\n", 
+ªt_vÆ
+);
+
+12 
+	`exô
+();
+
+13 
+	}
+};
+
 	@param.h
 
 1 
@@ -18359,6 +18453,56 @@ i
 ;
 
 121 
+	}
+}
+
+	@prac_syscall.c
+
+1 
+	~"ty≥s.h
+"
+
+2 
+	~"defs.h
+"
+
+6 
+	$myfun˘i⁄
+(*
+°r
+)
+
+8 
+	`˝rötf
+("%s\n", 
+°r
+);
+
+10 
+	}
+}
+
+13 
+	$sys_myfun˘i⁄
+()
+
+15 *
+°r
+;
+
+17 if(
+	`¨g°r
+(0, &
+°r
+) < 0)
+
+19  
+	`myfun˘i⁄
+(
+°r
+);
+
+20 
 	}
 }
 
@@ -24494,6 +24638,10 @@ sys_wrôe
 sys_u±ime
 ();
 
+106 
+sys_myfun˘i⁄
+();
+
 107 (*
 sysˇŒs
 [])() = {
@@ -24624,19 +24772,25 @@ SYS_˛o£
 sys_˛o£
 ,
 
-129 
+129 [
+SYS_myfun˘i⁄
+] 
+sys_myfun˘i⁄
+,
+
+130 
 	}
 };
 
-132 
+133 
 	$sysˇŒ
 ()
 
-134 
+135 
 num
 ;
 
-135 
+136 
 ¥oc
  *
 cuΩroc
@@ -24644,7 +24798,7 @@ cuΩroc
 	`my¥oc
 ();
 
-137 
+138 
 num
  = 
 cuΩroc
@@ -24654,7 +24808,7 @@ tf
 óx
 ;
 
-138 if(
+139 if(
 num
  > 0 &&Çum < 
 	`NELEM
@@ -24662,7 +24816,7 @@ num
 sysˇŒs
 ) && syscalls[num]) {
 
-139 
+140 
 cuΩroc
 ->
 tf
@@ -24674,11 +24828,11 @@ sysˇŒs
 num
 ]();
 
-141 
+142 
 	`˝rötf
 ("%d %s: unknown sys call %d\n",
 
-142 
+143 
 cuΩroc
 ->
 pid
@@ -24688,7 +24842,7 @@ pid
 num
 );
 
-143 
+144 
 cuΩroc
 ->
 tf
@@ -24696,7 +24850,7 @@ tf
 óx
  = -1;
 
-145 
+146 
 	}
 }
 
@@ -24825,6 +24979,12 @@ tf
 22 
 	#SYS_˛o£
  21
+
+	)
+
+23 
+	#SYS_myfun˘i⁄
+ 22
 
 	)
 
@@ -28571,6 +28731,10 @@ fd
 25 
 	`u±ime
 ();
+
+26 
+	`myfun˘i⁄
+(*);
 
 28 
 	`°©
@@ -34803,9 +34967,15 @@ sbrk
 )
 
 31 
-	`SYSCALL
+	$SYSCALL
 (
 u±ime
+)
+
+32 
+	`SYSCALL
+(
+myfun˘i⁄
 )
 
 	@vectors.S
@@ -45510,8 +45680,8 @@ ush‹t
 1
 .
 0
-76
-600
+79
+638
 asm.h
 bio.c
 bootasm.S
@@ -45532,6 +45702,7 @@ file.h
 forktest.c
 fs.c
 fs.h
+getppid.c
 grep.c
 ide.c
 init.c
@@ -45553,9 +45724,11 @@ mkfs.c
 mmu.h
 mp.c
 mp.h
+my_userapp.c
 param.h
 picirq.c
 pipe.c
+prac_syscall.c
 printf.c
 proc.c
 proc.h
