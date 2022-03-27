@@ -35,4 +35,4 @@
 #define IRQ_IDE         14
 #define IRQ_ERROR       19
 #define IRQ_SPURIOUS    31
-
+#define T_USERINT		128
