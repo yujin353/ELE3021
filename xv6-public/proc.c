@@ -391,6 +391,12 @@ yield(void)
   release(&ptable.lock);
 }
 
+void
+sys_yield(void)
+{
+	yield();
+}
+
 // A fork child's very first scheduling by scheduler()
 // will swtch here.  "Return" to user space.
 void
