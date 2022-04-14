@@ -89,6 +89,10 @@ found:
   p->state = EMBRYO;
   p->pid = nextpid++;
 
+  p->level = 0;
+  p->priority = 0;
+  p->usedtick = 0;
+
   release(&ptable.lock);
 
   // Allocate kernel stack.
@@ -319,6 +323,9 @@ wait(void)
 //  - swtch to start running that process
 //  - eventually that process transfers control
 //      via swtch back to the scheduler.
+
+
+#ifdef ML_SCHED
 void
 scheduler(void)
 {
@@ -362,7 +369,91 @@ scheduler(void)
 	release(&ptable.lock);
   }
 }
-/*	  }
+#elif MLFQ_SCHED
+void
+scheduler(void)
+{
+  struct proc *p;
+  struct proc *slct_p;
+  struct cpu *c = mycpu();
+  c->proc = 0;
+  int priorityBoost = 0;
+
+  for(;;){
+    // Enable interrupts on this processor.
+    sti();
+
+    // Loop over process table looking for process to run.
+    acquire(&ptable.lock);
+	slct_p = 0;
+	
+	for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+         if(p->state != RUNNABLE || p->level == MLFQ_K)
+             continue;
+		 if(slct_p == 0)
+		 	slct_p = p;
+		 else{
+			 if(slct_p->level > p->level){
+				 slct_p = p;
+			 }
+			 else if(slct_p->level == p->level){
+				 if(p->usedtick != 0){
+					 slct_p = p;
+				 }
+				 else{
+					if((slct_p->usedtick == 0) && (slct_p->priority < p->priority)){
+                             slct_p = p;
+                    }
+				 }
+			 }
+		 }
+	}
+	p = slct_p;
+
+	if(p != 0){
+		c->proc = p;
+	    switchuvm(p);
+    	p->state = RUNNING;
+	    swtch(&(c->scheduler), p->context);
+	    switchkvm();
+		
+	    c->proc = 0;
+		if(p->usedtick >= ((p->level)*4 + 2)){
+			p->level++;
+			p->usedtick = 0;
+		}
+	}
+	priorityBoost++;
+	if(priorityBoost >= 100){
+		for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+            p->level = 0;
+            p->usedtick = 0;
+         }
+		priorityBoost = 0;
+	}
+	release(&ptable.lock);
+
+  }
+}
+
+#else
+void
+scheduler(void)
+{
+  struct proc *p;
+  struct cpu *c = mycpu();
+  c->proc = 0;
+  
+  for(;;){
+    // Enable interrupts on this processor.
+    sti();
+
+    // Loop over process table looking for process to run.
+    acquire(&ptable.lock);
+    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+      if(p->state != RUNNABLE)
+        continue;
+
       // Switch to chosen process.  It is the process's job
       // to release ptable.lock and then reacquire it
       // before jumping back to us.
@@ -380,7 +471,8 @@ scheduler(void)
     release(&ptable.lock);
 
   }
-}*/
+}
+#endif
 
 // Enter scheduler.  Must hold only ptable.lock
 // and have changed proc->state. Saves and restores
@@ -414,14 +506,11 @@ yield(void)
 {
   acquire(&ptable.lock);  //DOC: yieldlock
   myproc()->state = RUNNABLE;
+#ifdef MLFQ_SCHED
+  myproc()->usedtick++;
+#endif
   sched();
   release(&ptable.lock);
-}
-
-void
-sys_yield(void)
-{
-	yield();
 }
 
 // A fork child's very first scheduling by scheduler()
@@ -564,4 +653,33 @@ procdump(void)
     }
     cprintf("\n");
   }
+}
+
+int
+getlev(void)
+{
+	return myproc()->level;
+}
+
+int
+setpriority(int pid, int priority)
+{
+	struct proc *curproc = myproc();
+	struct proc *p;
+
+	if(priority < 0 || priority > 10)
+		return -2;
+
+	acquire(&ptable.lock);
+	for(p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
+		if(p->pid == pid){
+			if(curproc->pid == p->parent->pid){
+				p->priority = priority;
+				release(&ptable.lock);
+				return 0;
+			}
+		}
+	}
+	release(&ptable.lock);
+	return -1;
 }

@@ -61,7 +61,10 @@ sys_sleep(void)
 {
   int n;
   uint ticks0;
-
+#ifdef MLFQ_SCHED
+  myproc()->level = 0;
+  myproc()->usedtick = 0;
+#endif
   if(argint(0, &n) < 0)
     return -1;
   acquire(&tickslock);
@@ -94,4 +97,33 @@ int
 sys_getppid(void)
 {
 	return myproc()->parent->pid;
+}
+
+//PROJECT2_MLFQ
+int
+sys_yield(void)
+{
+	struct proc *p = myproc();
+	p->level = 0;
+	p->usedtick = 0;
+	yield();
+	return 0;
+}
+
+int
+sys_getlev(void)
+{
+	return getlev();
+}
+
+int
+sys_setpriority(void)
+{
+	int pid, priority;
+
+	if(argint(0, &pid) < 0)
+		return -1;
+	if(argint(1, &priority) < 0)
+		return -1;
+	return setpriority(pid, priority);
 }
