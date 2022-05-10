@@ -7,6 +7,17 @@
 #include "proc.h"
 #include "spinlock.h"
 
+int num_lwp = 0;
+int nextlwpid = 1;
+
+struct st {
+	int use;
+};
+
+struct {
+	struct st st[NPROC*50];
+} stable;
+
 struct {
   struct spinlock lock;
   struct proc proc[NPROC];
@@ -92,6 +103,13 @@ found:
   p->level = 0;
   p->priority = 0;
   p->usedtick = 0;
+
+  p->lwpid = 0;
+  p->lwppid = 0;
+  p->retval = 0;
+  p->sbase = 0;
+  p->snum = 0;
+  p->forked = 0;
 
   release(&ptable.lock);
 
@@ -193,6 +211,11 @@ fork(void)
     return -1;
   }
 
+  if(curproc->lwpid > 0) {
+	  np->forked = 1;
+	  np->lwpid = nextlwpid++;
+  }
+
   // Copy process state from proc.
   if((np->pgdir = copyuvm(curproc->pgdir, curproc->sz)) == 0){
     kfree(np->kstack);
@@ -238,6 +261,48 @@ exit(void)
   if(curproc == initproc)
     panic("init exiting");
 
+  if(curproc->lwpid == 0){
+	curproc->killed = 1;
+
+	acquire(&ptable.lock);
+
+	for(;;) {
+	  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
+		if(p->lwppid == curproc->pid) {
+		  if(p->state == ZOMBIE) {
+			kfree(p->kstack);
+			p->kstack = 0;
+			deallocuvm(p->pgdir, p->sbase+2*PGSIZE, p->sbase);
+			p->pid = 0;
+			p->parent = 0;
+			p->name[0] = 0;
+			p->killed = 0;
+			p->state = UNUSED;
+
+			p->lwpid = 0;
+			p->lwppid = 0;
+			p->sbase = 0;
+			p->snum = 0;
+			p->forked = 0;
+			p->retval = 0;
+
+			num_lwp--;
+		  } else {
+			p->killed = 1;
+			wakeup1(p);
+		  }
+		}
+	  }
+	  if(num_lwp == 0) {
+		  release(&ptable.lock);
+		  break;
+	  }
+	  sleep(curproc, &ptable.lock);
+	}
+  } else if(curproc->forked != 1) {
+	  curproc->parent->killed = 1;
+  }
+
   // Close all open files.
   for(fd = 0; fd < NOFILE; fd++){
     if(curproc->ofile[fd]){
@@ -252,6 +317,13 @@ exit(void)
   curproc->cwd = 0;
 
   acquire(&ptable.lock);
+
+  if(curproc->lwpid == 0) {
+	wakeup1(curproc->parent);
+  } else {
+	  if(curproc->parent != 0)
+		  wakeup1(curproc->parent);
+  }
 
   // Parent might be sleeping in wait().
   wakeup1(curproc->parent);
@@ -473,6 +545,171 @@ scheduler(void)
   }
 }
 #endif
+
+uint
+get_base(struct proc *p) {
+	for(uint i = 0; i < NPROC*50; i++) {
+		if(stable.st[i].use != 0)
+			continue;
+
+		stable.st[i].use = 1;
+		p->snum = i;
+
+		return i;
+	}
+	panic("get_base() panic");
+}
+
+int
+thread_create(thread_t* thread, void* (*start_routine)(void*), void* arg){
+	int i;
+	struct proc *np;
+	struct proc *curproc = myproc();
+
+	if((np = allocproc()) == 0)
+		return -1;
+
+	num_lwp++;
+
+	acquire(&ptable.lock);
+
+	if(curproc->lwpid > 0) {
+		np->lwppid = curproc->lwppid;
+		np->parent = curproc->parent;
+	} else if(curproc->lwpid == 0) {
+		np->lwppid = curproc->pid;
+		np->parent = curproc;
+	} else {
+		cprintf("curproc->lwpid < 0");
+		return -1;
+	}
+
+	np->lwpid = nextlwpid++;
+	*thread = np->lwpid;
+
+	np->pgdir = curproc->pgdir;
+	*np->tf = *curproc->tf;
+	safestrcpy(np->name, curproc->name, sizeof(curproc->name));
+	np->cwd = idup(curproc->cwd);
+
+	np->sbase = curproc->sz + (uint)(2*PGSIZE*(get_base(np)+1));
+
+	if((np->sz = allocuvm(np->pgdir, np->sbase, np->sbase + 2*PGSIZE)) == 0){
+		np->state = UNUSED;
+		return -1;
+	}
+
+	np->tf->esp = np->sz - 4;
+	*((uint*)(np->tf->esp)) = (uint)arg;
+	np->tf->esp = np->sz - 8;
+	*((uint*)(np->tf->esp)) = 0xffffffff;
+
+	np->tf->eip = (uint)start_routine;
+
+	for(i=0; i<NOFILE; i++)
+		if(curproc->ofile[i])
+			np->ofile[i] = filedup(curproc->ofile[i]);
+
+	np->state = RUNNABLE;
+	release(&ptable.lock);
+
+	return 0;
+}
+
+void
+thread_exit(void* retval) {
+	struct proc *curproc = myproc();
+	int fd;
+
+	if(curproc == initproc)
+		panic("init exiting\n");
+
+	for(fd = 0; fd < NOFILE; fd++) {
+		if(curproc->ofile[fd]) {
+			fileclose(curproc->ofile[fd]);
+			curproc->ofile[fd] = 0;
+		}
+	}
+
+	begin_op();
+	iput(curproc->cwd);
+	end_op();
+	curproc->cwd = 0;
+
+	acquire(&ptable.lock);
+
+	curproc->retval = retval;
+
+	wakeup1(curproc->parent);
+
+	curproc->state = ZOMBIE;
+	num_lwp--;
+
+	sched();
+
+	cprintf("curproc->state: %d\n", curproc->state);
+	cprintf("curproc->lwppid: %d\n", curproc->lwppid);
+	cprintf("curproc->lwpid: %d\n", curproc->lwpid);
+	cprintf("curproc->pid: %d\n", curproc->pid);
+	cprintf("num_lwp: %d\n", num_lwp);
+
+	panic("zombie exit\n");
+}
+
+int
+thread_join(thread_t thread, void** retval) {
+	struct proc *p;
+	struct proc *curproc = myproc();
+
+	if(curproc->lwpid != 0) {
+		cprintf("curproc not a manager\n");
+		return -1;
+	}
+
+	acquire(&ptable.lock);
+
+	for(;;) {
+		for(p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
+			if(p->lwpid != thread)
+				continue;
+			if(p->lwppid != curproc->pid)
+				continue;
+
+			if(p->state == ZOMBIE) {
+				*retval = p->retval;
+
+				kfree(p->kstack);
+				p->kstack = 0;
+				deallocuvm(p->pgdir, p->sbase+2*PGSIZE, p->sbase);
+
+				stable.st[p->snum].use = 0;
+
+				p->pid = 0;
+				p->parent = 0;
+				p->name[0] = 0;
+				p->killed = 0;
+				p->state = UNUSED;
+
+				p->lwpid = 0;
+				p->lwppid = 0;
+				p->sbase = 0;
+				p->snum = 0;
+				p->forked = 0;
+				p->retval = 0;
+
+				release(&ptable.lock);
+
+				return 0;
+			}
+		}
+
+		if(curproc->killed) {
+			release(&ptable.lock);
+			return -1;
+		}
+		sleep(curproc, &ptable.lock);
+	}
+}
 
 // Enter scheduler.  Must hold only ptable.lock
 // and have changed proc->state. Saves and restores

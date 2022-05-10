@@ -53,6 +53,13 @@ struct proc {
   int level;					// project2_mlfq
   int priority;					// project2_mlfq
   int usedtick;					// project2_mlfq
+
+  int lwpid;
+  int lwppid;
+  void *retval;
+  int sbase;
+  int snum;
+  int forked;
 };
 
 // Process memory is laid out contiguously, low addresses first:
