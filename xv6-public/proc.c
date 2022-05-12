@@ -182,6 +182,9 @@ growproc(int n)
 {
   uint sz;
   struct proc *curproc = myproc();
+  struct proc *p;
+
+  acquire(&ptable.lock);
 
   sz = curproc->sz;
   if(n > 0){
@@ -192,6 +195,13 @@ growproc(int n)
       return -1;
   }
   curproc->sz = sz;
+
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
+	  if(p->lwppid == curproc->lwppid || p->pid == curproc->lwppid)
+		  if(curproc->lwppid > 0)
+			  p->sz = curproc->sz;
+  release(&ptable.lock);
+
   switchuvm(curproc);
   return 0;
 }
@@ -246,6 +256,20 @@ fork(void)
   release(&ptable.lock);
 
   return pid;
+}
+
+int
+isLWP(struct proc *t)
+{
+	struct proc *p;
+	struct proc *curproc = myproc();
+
+	if (curproc->lwppid > 0)
+		return 1;
+	for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
+	    if(p->lwppid == t->lwppid)
+			return 1;
+	return 0;
 }
 
 // Exit the current process.  Does not return.
@@ -351,7 +375,7 @@ wait(void)
   struct proc *p;
   int havekids, pid;
   struct proc *curproc = myproc();
-  
+ 
   acquire(&ptable.lock);
   for(;;){
     // Scan through table looking for exited children.
@@ -375,8 +399,8 @@ wait(void)
         return pid;
       }
     }
-
     // No point waiting if we don't have any children.
+
     if(!havekids || curproc->killed){
       release(&ptable.lock);
       return -1;
@@ -605,6 +629,12 @@ thread_create(thread_t* thread, void* (*start_routine)(void*), void* arg){
 	*((uint*)(np->tf->esp)) = 0xffffffff;
 
 	np->tf->eip = (uint)start_routine;
+
+	struct proc *p;
+
+	for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
+		if(p->parent->pid == np->parent->pid)
+			p->sz = np->sz;
 
 	for(i=0; i<NOFILE; i++)
 		if(curproc->ofile[i])
@@ -841,16 +871,27 @@ kill(int pid)
   struct proc *p;
 
   acquire(&ptable.lock);
+
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-    if(p->pid == pid){
-      p->killed = 1;
-      // Wake process from sleep if necessary.
-      if(p->state == SLEEPING)
-        p->state = RUNNABLE;
-      release(&ptable.lock);
-      return 0;
-    }
+	  if(p->pid == pid){
+		  p->killed = 1;
+		  // Wake process from sleep if necessary.
+		  if(p->state == SLEEPING)
+			  p->state = RUNNABLE;
+		  release(&ptable.lock);
+		  return 0;
+	  }
   }
+
+/*  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+      if(p->lwppid == pid ) {
+          p->killed = 1;
+          if(p->state == SLEEPING) {
+              p->state = RUNNABLE;
+          }
+      }
+  }
+*/
   release(&ptable.lock);
   return -1;
 }
