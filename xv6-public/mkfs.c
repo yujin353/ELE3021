@@ -230,6 +230,8 @@ ialloc(ushort type)
   din.type = xshort(type);
   din.nlink = xshort(1);
   din.size = xint(0);
+  din.permission = xint(0|MODE_RUSR|MODE_WUSR|MODE_XUSR|MODE_ROTH|MODE_XOTH);
+  strncpy(din.owner, "root", 16);
   winode(inum, &din);
   return inum;
 }

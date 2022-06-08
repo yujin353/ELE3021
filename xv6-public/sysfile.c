@@ -1,4 +1,4 @@
-//
+
 // File-system system calls.
 // Mostly argument checking, since we don't trust
 // user code, and calls into file.c and fs.c.
@@ -200,6 +200,12 @@ sys_unlink(void)
 
   ilock(dp);
 
+  if(chkimode(dp, 2)==0){
+    iunlockput(dp);
+    end_op();
+    return -1;
+  }
+
   // Cannot unlink "." or "..".
   if(namecmp(name, ".") == 0 || namecmp(name, "..") == 0)
     goto bad;
@@ -251,12 +257,21 @@ create(char *path, short type, short major, short minor)
   if((ip = dirlookup(dp, name, 0)) != 0){
     iunlockput(dp);
     ilock(ip);
-    if(type == T_FILE && ip->type == T_FILE)
+    if(type == T_FILE && ip->type == T_FILE){
+      if(chkimode(ip, 2)==0){
+        iunlockput(ip);
+        return 0;
+      }
       return ip;
+    }
     iunlockput(ip);
     return 0;
   }
-
+  if(chkimode(dp, 2)==0){
+    iunlockput(dp);
+    return 0;
+  }
+  
   if((ip = ialloc(dp->dev, type)) == 0)
     panic("create: ialloc");
 
@@ -301,6 +316,9 @@ sys_open(void)
       end_op();
       return -1;
     }
+    strncpy(ip->owner, getnowuser(), 16);
+    ip->permission = MODE_RUSR|MODE_WUSR|MODE_ROTH;
+    iupdate(ip);
   } else {
     if((ip = namei(path)) == 0){
       end_op();
@@ -312,6 +330,21 @@ sys_open(void)
       end_op();
       return -1;
     }
+  }
+
+  if((omode == O_WRONLY)||(omode == O_RDWR)){
+	  if(chkimode(ip, 2) == 0){
+        iunlockput(ip);
+        end_op();
+        return -1;
+      }
+  }
+  if((omode == O_RDONLY)||(omode == O_RDWR)){
+	  if(chkimode(ip, 4) == 0){
+        iunlockput(ip);
+        end_op();
+        return -1;
+      }
   }
 
   if((f = filealloc()) == 0 || (fd = fdalloc(f)) < 0){
@@ -333,6 +366,187 @@ sys_open(void)
 }
 
 int
+sys_loaduserinfo(void){
+  begin_op();
+  struct inode* userlist;
+  if((userlist = namei("/userlist"))==0){
+    userlist = create("/userlist", T_FILE, 0, 0);
+    strncpy(userlist->owner, "root", 16);
+    userlist->permission = MODE_RUSR|MODE_WUSR;
+    iupdate(userlist);
+    iunlockput(userlist);
+  }
+  if(userlist == 0){
+    end_op();
+    return 0;
+  }
+  iput(userlist);
+  end_op();
+  begin_op();
+  userlist = namei("/userlist");
+  ilock(userlist);
+  loaduserinfo(userlist);
+  iupdate(userlist);
+  iunlockput(userlist);
+  end_op();
+    begin_op();
+    struct inode* ip = create("temp", T_DIR, 0, 0);
+    iupdate(ip);
+    iunlockput(ip);
+    end_op();
+  struct inode *dp;
+  struct dirent de;
+  char name[DIRSIZ];
+  uint off;
+
+  begin_op();
+  if((dp = nameiparent("temp", name)) == 0){
+    end_op();
+    return -1;
+  }
+
+  ilock(dp);
+  
+  // Cannot unlink "." or "..".
+  if(namecmp(name, ".") == 0 || namecmp(name, "..") == 0)
+    goto bad;
+
+  if((ip = dirlookup(dp, name, &off)) == 0)
+    goto bad;
+  ilock(ip);
+  if(ip->nlink < 1)
+    panic("unlink: nlink < 1");
+  if(ip->type == T_DIR && !isdirempty(ip)){
+    iunlockput(ip);
+    goto bad;
+  }
+
+  memset(&de, 0, sizeof(de));
+  if(writei(dp, (char*)&de, off, sizeof(de)) != sizeof(de))
+    panic("unlink: writei");
+  if(ip->type == T_DIR){
+    dp->nlink--;
+    iupdate(dp);
+  }
+  iunlockput(dp);
+
+  ip->nlink--;
+  iupdate(ip);
+  iunlockput(ip);
+
+  end_op();
+  return 0;
+
+bad:
+  iunlockput(dp);
+  end_op();
+ 
+
+  return 0;
+}
+
+int sys_login(void){
+    char* username;
+    char* password;
+
+    if(argstr(0, &username)<0||argstr(1, &password)<0){
+        return -1;
+    }
+    return login(username, password);
+}
+
+int sys_logout(void){
+    return logout();
+}
+
+int sys_addUser(void){
+    char* username;
+    char* password;
+
+    if (strncmp("root", getnowuser(), 16)!=0 || argstr(0, &username)<0||argstr(1, &password)<0){
+        return -1;
+    }
+    begin_op();
+    struct inode* userlist = namei("/userlist");
+    if(userlist == 0){
+        end_op();
+        return -1;
+    }
+    ilock(userlist);
+    iunlock(userlist);
+    end_op();
+    begin_op();
+    ilock(userlist);
+    int res = addUser(username, password, userlist);
+    iupdate(userlist);
+    iunlockput(userlist);
+    end_op();
+    struct inode* ip;
+    begin_op();
+    if((ip = namei(username))==0){
+        ip = create(username, T_DIR, 0, 0);
+        strncpy(ip->owner, username, 15);
+        ip->permission = MODE_RUSR|MODE_WUSR|MODE_XUSR|MODE_ROTH|MODE_XOTH;
+        strncpy(ip->owner, username, 16);
+        iupdate(ip);
+        iunlockput(ip);
+    }else{
+        iput(ip);
+    }
+    end_op();
+    return res;
+}
+
+int sys_deleteUser(void){
+    char* username;
+
+    if (strncmp("root", getnowuser(), 16)!=0 || argstr(0, &username)<0){
+        return -1;
+    }
+    begin_op();
+    struct inode* userlist = namei("/userlist");
+    if(userlist == 0){
+        end_op();
+        return -1;
+    }
+    end_op();
+    begin_op();
+    ilock(userlist);
+    int res = deleteUser(username, userlist);
+    iupdate(userlist);
+    iunlock(userlist);
+    end_op();
+    return res;
+}
+
+int sys_chmod(void){
+    char* pathname;
+    int mode;
+    int res = -1;
+
+    if(argstr(0, &pathname)<0||argint(1, &mode)<0){
+        return -1;
+    }
+    
+    begin_op();
+    struct inode* ip = namei(pathname);
+    if(ip == 0){
+        end_op();
+        return -1;
+    }
+    
+    ilock(ip);
+    if(strncmp(ip->owner, getnowuser(), 16)==0||strncmp("root", getnowuser(), 16)==0){
+        ip->permission = mode;
+        res = 0;
+    }
+    iupdate(ip);
+    iunlockput(ip);
+    end_op();
+    return res;
+}
+
+int
 sys_mkdir(void)
 {
   char *path;
@@ -343,6 +557,9 @@ sys_mkdir(void)
     end_op();
     return -1;
   }
+  ip->permission = MODE_RUSR|MODE_WUSR|MODE_XUSR|MODE_ROTH|MODE_XOTH;
+  strncpy(ip->owner, getnowuser(), 16);
+  iupdate(ip);
   iunlockput(ip);
   end_op();
   return 0;
@@ -363,6 +580,8 @@ sys_mknod(void)
     end_op();
     return -1;
   }
+  ip->permission = MODE_RUSR|MODE_WUSR|MODE_XUSR|MODE_ROTH|MODE_WOTH|MODE_XOTH;
+  iupdate(ip);
   iunlockput(ip);
   end_op();
   return 0;
@@ -386,6 +605,12 @@ sys_chdir(void)
     end_op();
     return -1;
   }
+
+  if(chkimode(ip, 1)==0){
+    iunlockput(ip);
+    return -1;
+  }
+  
   iunlock(ip);
   iput(curproc->cwd);
   end_op();

@@ -27,6 +27,163 @@ static void itrunc(struct inode*);
 // only one device
 struct superblock sb; 
 
+struct {
+  char info[10][2][16];
+  int now;
+  int cnt;
+  struct inode* _userlist;
+} usertable;
+
+static int userloaded = 0;
+
+int chkimode(struct inode* ip, int mode){
+    if(userloaded == 0){
+        return 1;
+    }
+
+    if(strncmp(ip->owner, getnowuser(), 16)==0||strncmp("root", getnowuser(), 16)==0){
+        mode *= 8;
+    }
+    return (ip->permission & mode);
+}
+
+
+void loaduserinfo(struct inode* userlist){
+  usertable.now = 0;
+  usertable.cnt = 0;
+  memset(usertable.info, 0, sizeof(usertable.info));
+  usertable._userlist = userlist;
+  readi(userlist, (char*)(usertable.info), 0, 320);
+  for(int i = 0; i < 10; i++){
+    if (usertable.info[i][0][0] != 0){
+      usertable.cnt++;
+    }
+  }
+
+  if(usertable.cnt==0){
+    strncpy(usertable.info[0][0], "root", 15);
+    strncpy(usertable.info[0][1], "1234", 15);
+    usertable.cnt++;
+  }
+  int r;
+  int max = ((MAXOPBLOCKS-1-1-2) / 2) * 512;
+  int i = 0;
+  char* addr = (char*)usertable.info;
+  int n = 320;
+  int off = 0;
+  while(i < n){
+    int n1 = n - i;
+    if(n1 > max)
+      n1 = max;
+
+    if ((r = writei(userlist, addr + i, off, n1)) > 0)
+        off+=r;
+    if(r < 0)
+      break;
+    if(r != n1)
+      panic("short filewrite");
+    i += r;
+  }
+ userloaded = 1;
+}
+
+int addUser(char* username, char* password, struct inode* userlist){
+  if (usertable.cnt==10){
+    return -1;
+  }
+  int idx = 0;
+  for(int i = 0; i < 10; i++){
+    if (strncmp(usertable.info[i][0], username, 15)==0){
+      return -1;
+    }
+    if (usertable.info[i][0][0] == 0){
+      idx = i;
+    }
+  }
+
+  strncpy(usertable.info[idx][0], username, 15);
+  strncpy(usertable.info[idx][1], password, 15);
+  int r;
+  int max = ((MAXOPBLOCKS-1-1-2) / 2) * 512;
+  int i = 0;
+  char* addr = (char*)usertable.info;
+  int n = 320;
+  int off = 0;
+  while(i < n){
+    int n1 = n - i;
+    if(n1 > max)
+      n1 = max;
+
+    if ((r = writei(userlist, addr + i, off, n1)) > 0)
+        off+=r;
+    if(r < 0)
+      break;
+    if(r != n1)
+      panic("short filewrite");
+    i += r;
+  }
+  usertable.cnt++;
+  return 0;
+}
+
+int deleteUser(char* username, struct inode* userlist){
+  if(strncmp(username, "root", 15)==0){
+    return -1;
+  }
+
+  for(int i = 0; i < 10; i++){
+    if (strncmp(usertable.info[i][0], username, 15)==0){
+      memset(usertable.info[i][0], 0, 16);
+      memset(usertable.info[i][1], 0, 16);
+      int r;
+      int max = ((MAXOPBLOCKS-1-1-2) / 2) * 512;
+      int i = 0;
+      char* addr = (char*)usertable.info;
+      int n = 320;
+      int off = 0;
+      while(i < n){
+        int n1 = n - i;
+        if(n1 > max)
+          n1 = max;
+
+        if ((r = writei(userlist, addr + i, off, n1)) > 0)
+          off += r;
+        if(r < 0)
+          break;
+        if(r != n1)
+          panic("short filewrite");
+        i += r;
+      }
+
+      usertable.cnt--;
+      return 0;
+    }
+  }
+  return -1;
+}
+
+int login(char* username, char* password){
+  for(int i = 0; i < 10; i++){
+    if(strncmp(usertable.info[i][0], username, 16)==0 && strncmp(usertable.info[i][1], password, 16)==0){
+      usertable.now = i;
+      return 0;
+    }
+  }
+  return -1;
+}
+
+int logout(){
+  usertable.now = 0;
+  return 0;
+}
+
+const char* getnowuser(){
+    if(usertable.cnt == 0){
+        return "root";
+    }
+    return usertable.info[usertable.now][0];
+}
+
 // Read the super block.
 void
 readsb(int dev, struct superblock *sb)
@@ -230,6 +387,8 @@ iupdate(struct inode *ip)
   dip->minor = ip->minor;
   dip->nlink = ip->nlink;
   dip->size = ip->size;
+  dip->permission = ip->permission;
+  strncpy(dip->owner, ip->owner, 16);
   memmove(dip->addrs, ip->addrs, sizeof(ip->addrs));
   log_write(bp);
   brelse(bp);
@@ -303,6 +462,8 @@ ilock(struct inode *ip)
     ip->minor = dip->minor;
     ip->nlink = dip->nlink;
     ip->size = dip->size;
+	strncpy(ip->owner, dip->owner, 16);
+	ip->permission = dip->permission;
     memmove(ip->addrs, dip->addrs, sizeof(ip->addrs));
     brelse(bp);
     ip->valid = 1;
@@ -444,6 +605,8 @@ stati(struct inode *ip, struct stat *st)
   st->type = ip->type;
   st->nlink = ip->nlink;
   st->size = ip->size;
+  st->permission = ip->permission;
+  strncpy(st->owner, ip->owner, 16);
 }
 
 //PAGEBREAK!
@@ -637,6 +800,11 @@ namex(char *path, int nameiparent, char *name)
       iunlockput(ip);
       return 0;
     }
+
+	if(chkimode(ip, 1) == 0){
+		iunlockput(ip);
+		return ip;
+	}
     if(nameiparent && *path == '\0'){
       // Stop one level early.
       iunlock(ip);

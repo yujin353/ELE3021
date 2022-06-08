@@ -26,6 +26,15 @@ exec(char *path, char **argv)
     cprintf("exec: fail\n");
     return -1;
   }
+
+  ilock(ip);
+  if(chkimode(ip, 1) == 0) {
+	  iunlockput(ip);
+	  end_op();
+	  return -1;
+  }
+  iunlock(ip);
+
   ilock(ip);
   pgdir = 0;
 
@@ -101,8 +110,7 @@ exec(char *path, char **argv)
   curproc->tf->esp = sp;
   curproc->forked = 0;
   switchuvm(curproc);
-  if(isLWP(curproc) == 0)
-	freevm(oldpgdir);
+  freevm(oldpgdir);
   return 0;
 
  bad:

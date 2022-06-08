@@ -32,6 +32,8 @@ struct dinode {
   short minor;          // Minor device number (T_DEV only)
   short nlink;          // Number of links to inode in file system
   uint size;            // Size of file (bytes)
+  uint permission;
+  char owner[16];
   uint addrs[NDIRECT+1];   // Data block addresses
 };
 
@@ -55,3 +57,10 @@ struct dirent {
   char name[DIRSIZ];
 };
 
+// project 4 FILEMODE
+#define MODE_RUSR   32  // owner read
+#define MODE_WUSR   16  // owner write
+#define MODE_XUSR   8   // owner execute
+#define MODE_ROTH   4   // others read
+#define MODE_WOTH   2   // others write
+#define MODE_XOTH   1   // others execute

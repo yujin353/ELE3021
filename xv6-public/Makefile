@@ -81,7 +81,7 @@ AS = $(TOOLPREFIX)gas
 LD = $(TOOLPREFIX)ld
 OBJCOPY = $(TOOLPREFIX)objcopy
 OBJDUMP = $(TOOLPREFIX)objdump
-CFLAGS = -fno-pic -static -fno-builtin -fno-strict-aliasing -O0 -Wall -MD -ggdb -m32 -Werror -fno-omit-frame-pointer
+CFLAGS = -fno-pic -static -fno-builtin -fno-strict-aliasing -O2 -Wall -MD -ggdb -m32 -Werror -fno-omit-frame-pointer
 CFLAGS += $(shell $(CC) -fno-stack-protector -E -x c /dev/null >/dev/null 2>&1 && echo -fno-stack-protector)
 
 CFLAGS += -g -Wall -D $(SCHED_POLICY) -D MLFQ_K=$(MLFQ_K)
@@ -196,11 +196,10 @@ UPROGS=\
 	_test_yield\
 	_ml_test\
 	_mlfq_test\
-	_hello_thread\
-	_thread_exec\
-	_thread_exit\
-	_thread_kill\
-	_thread_test\
+	_chmod_test\
+	_useradd_test\
+	_userdelete_test\
+	_umanager\
 
 fs.img: mkfs README $(UPROGS)
 	./mkfs fs.img README $(UPROGS)
@@ -270,7 +269,7 @@ qemu-nox-gdb: fs.img xv6.img .gdbinit
 EXTRA=\
 	mkfs.c ulib.c user.h cat.c echo.c forktest.c grep.c kill.c\
 	ln.c ls.c mkdir.c rm.c stressfs.c usertests.c wc.c zombie.c\
-	printf.c umalloc.c my_userapp.c project01.c user_app.c test_yield.c ml_test.c mlfq_test.c hello_thread.c thread_exec.c thread_exit.c thread_kill.c thread_test.c\
+	printf.c umalloc.c my_userapp.c project01.c user_app.c test_yield.c ml_test.c mlfq_test.c chmod_test.c useradd_test.c userdelete_test.c umanager.c\
 	README dot-bochsrc *.pl toc.* runoff runoff1 runoff.list\
 	.gdbinit.tmpl gdbutil\
 

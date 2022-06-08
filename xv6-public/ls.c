@@ -41,6 +41,25 @@ ls(char *path)
     return;
   }
 
+  char permission[10] = "-rwxrwx";
+  if(st.type == 2){
+    permission[0] = '-';
+  }else if(st.type == 1){
+    permission[0] = 'd';
+  }else{
+    permission[0] = 'c';
+  }
+
+  for(int i = 0; i < 6; i++){
+    int idx = 6-i;
+    if((st.permission & (1<<i))==0){
+      permission[idx] = '-';
+    }
+    if(permission[0] == 'c'){
+      permission[idx] = '-';
+    }
+  }
+  
   switch(st.type){
   case T_FILE:
     printf(1, "%s %d %d %d\n", fmtname(path), st.type, st.ino, st.size);
@@ -63,7 +82,26 @@ ls(char *path)
         printf(1, "ls: cannot stat %s\n", buf);
         continue;
       }
-      printf(1, "%s %d %d %d\n", fmtname(buf), st.type, st.ino, st.size);
+      char permission[10] = "-rwxrwx";
+      if(st.type == 2){
+        permission[0] = '-';
+      }else if(st.type == 1){
+        permission[0] = 'd';
+      }else{
+        permission[0] = 'c';
+      }
+  
+      for(int i = 0; i < 6; i++){
+        int idx = 6-i;
+        if((st.permission & (1<<i))==0){
+          permission[idx] = '-';
+        }
+        if(permission[0] == 'c'){
+          permission[idx] = '-';
+        }
+      }
+ 
+      printf(1, "%s %s %s %d %d %d\n", fmtname(buf), permission, st.owner, st.type, st.ino, st.size);
     }
     break;
   }

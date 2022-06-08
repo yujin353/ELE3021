@@ -52,6 +52,13 @@ struct inode*   nameiparent(char*, char*);
 int             readi(struct inode*, char*, uint, uint);
 void            stati(struct inode*, struct stat*);
 int             writei(struct inode*, char*, uint, uint);
+void			loaduserinfo(struct inode*);
+int				addUser(char*, char*, struct inode*);
+int				deleteUser(char*, struct inode*);
+int				login(char*, char*);
+int				logout();
+const char*		getnowuser();
+int				chkimode(struct inode*, int);
 
 // ide.c
 void            ideinit(void);

@@ -5,7 +5,7 @@
 #include "user.h"
 #include "fcntl.h"
 
-char *argv[] = { "sh", 0 };
+char *argv[] = { "umanager", 0 };//{ "sh", 0 };
 
 int
 main(void)
@@ -19,16 +19,19 @@ main(void)
   dup(0);  // stdout
   dup(0);  // stderr
 
+  loaduserinfo();
+  //  printf(1, "init: starting login\n");
+
   for(;;){
-    printf(1, "init: starting sh\n");
+    printf(1, "init: starting login\n"); //printf(1, "init: starting sh\n");
     pid = fork();
     if(pid < 0){
       printf(1, "init: fork failed\n");
       exit();
     }
     if(pid == 0){
-      exec("sh", argv);
-      printf(1, "init: exec sh failed\n");
+      exec("umanager", argv);//exec("sh", argv);
+      printf(1, "init: exec umanager failed\n");
       exit();
     }
     while((wpid=wait()) >= 0 && wpid != pid)
