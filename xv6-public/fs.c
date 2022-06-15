@@ -62,7 +62,7 @@ void loaduserinfo(struct inode* userlist){
 
   if(usertable.cnt==0){
     strncpy(usertable.info[0][0], "root", 15);
-    strncpy(usertable.info[0][1], "1234", 15);
+    strncpy(usertable.info[0][1], "0000", 15);
     usertable.cnt++;
   }
   int r;
@@ -803,7 +803,7 @@ namex(char *path, int nameiparent, char *name)
 
 	if(chkimode(ip, 1) == 0){
 		iunlockput(ip);
-		return ip;
+		return 0;
 	}
     if(nameiparent && *path == '\0'){
       // Stop one level early.
